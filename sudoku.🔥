@@ -1,0 +1,116 @@
+from random import random_ui64, shuffle, seed
+
+
+struct HexSudoku:
+    var grid: SIMD[DType.uint8, 16 * 16]  # 16x16 grid (flattened)
+    var row_mask: SIMD[DType.uint16, 16]  # 16-bit mask per row
+    var col_mask: SIMD[DType.uint16, 16]  # 16-bit mask per column
+    var box_mask: SIMD[DType.uint16, 16]  # 16-bit mask per 4x4 subgrid
+
+    fn __init__(mut self):
+        self.grid = SIMD[DType.uint8, 16 * 16](0xFFFF)  # All values allowed
+        self.row_mask = SIMD[DType.uint16, 16](0xFFFF)
+        self.col_mask = SIMD[DType.uint16, 16](0xFFFF)
+        self.box_mask = SIMD[DType.uint16, 16](0xFFFF)
+
+    fn is_valid(self, row: Int, col: Int, num: Int) -> Bool:
+        """Check if placing 'num' at (row, col) is valid."""
+        var box_index = (row // 4) * 4 + (col // 4)
+        var bit = 1 << num
+        if not (self.row_mask[row] & bit):
+            return False
+        if not (self.col_mask[col] & bit):
+            return False
+        if not (self.box_mask[box_index] & bit):
+            return False
+        return True
+
+    fn place_number(mut self, row: Int, col: Int, num: Int):
+        """Place a number and update masks."""
+        var index = row * 16 + col
+        self.grid[index] = num
+        var box_index = (row // 4) * 4 + (col // 4)
+        var bit = 1 << num
+        self.row_mask[row] &= ~bit
+        self.col_mask[col] &= ~bit
+        self.box_mask[box_index] &= ~bit
+
+    fn remove_number(mut self, row: Int, col: Int, num: Int):
+        """Remove a number and restore masks."""
+        var index = row * 16 + col
+        self.grid[index] = 0
+        var box_index = (row // 4) * 4 + (col // 4)
+        var bit = 1 << num
+        self.row_mask[row] |= bit
+        self.col_mask[col] |= bit
+        self.box_mask[box_index] |= bit
+
+    fn solve(mut self, cell: Int = 0) -> Bool:
+        """Recursive backtracking solver."""
+        if cell == 256:
+            return True  # Solved
+
+        var row = cell // 16
+        var col = cell % 16
+
+        if self.grid[cell] != 0:
+            return self.solve(cell + 1)
+
+        for num in range(1, 17):
+            if self.is_valid(row, col, num):
+                self.place_number(row, col, num)
+                if self.solve(cell + 1):
+                    return True
+                self.remove_number(row, col, num)
+
+        return False
+
+    fn generate(mut self):
+        """Generate a full, valid Hexadecimal Sudoku."""
+        # Step 1: Fill the first row randomly
+        # var numbers = [i for i in range(1, 17)]
+        var numbers: List[Int] = List[Int](16)
+        for i in range(1, 17):
+            numbers[i - 1] = i
+        shuffle(numbers)
+        for col in range(16):
+            self.place_number(0, col, numbers[col])
+
+        # Step 2: Solve it compvarely
+        self.solve()
+
+        # Step 3: Remove numbers randomly to create a puzzle
+        var remove_count = 160  # Adjust difficulty
+        for _ in range(remove_count):
+            var row: Int
+            var col: Int
+            row = Int(random_ui64(0, 15))
+            col = Int(random_ui64(0, 15))
+            var index = row * 16 + col
+            while self.grid[index] == 0:
+                row = Int(random_ui64(0, 15))
+                col = Int(random_ui64(0, 15))
+                index = row * 16 + col
+            var num: Int = Int(self.grid[index])
+            self.remove_number(row, col, num)
+
+    fn print_grid(self):
+        var chars: StringLiteral = "0123456789ABCDEF"
+        """Print the Sudoku grid."""
+        for row in range(16):
+            var line = self.grid[(row)]
+            var bytes = line.as_bytes()
+            for i in range(16):
+                if i % 4 == 0:
+                    print("|", end="")
+                print(" ", end="")
+                print(chars[bytes[0][i]], end="")
+            print(line)
+
+
+fn main():
+    seed(32)
+    var sudoku = HexSudoku()
+    sudoku.generate()
+    # sudoku.print_grid()
+    print(sudoku.grid)

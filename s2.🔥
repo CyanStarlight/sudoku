@@ -1,0 +1,218 @@
+from collections import InlineArray
+from random import random_ui64, shuffle, seed
+
+
+struct _SudokuStorage:
+    var grid: InlineArray[InlineArray[Int, 16], 16]
+
+    fn __init__(mut self):
+        self.grid = InlineArray[InlineArray[Int, 16], 16](
+            unsafe_uninitialized=True
+        )
+        for i in range(16):
+            self.grid[i] = InlineArray[Int, 16](unsafe_uninitialized=True)
+            for j in range(16):
+                self.grid[i][j] = 0
+
+    fn set_value(mut self, row: Int, col: Int, value: Int):
+        if 0 <= row < 16 and 0 <= col < 16 and 1 <= value <= 16:
+            self.grid[row][col] = value
+
+    fn get_value(self, row: Int, col: Int) -> Int:
+        if 0 <= row < 16 and 0 <= col < 16:
+            return self.grid[row][col]
+        return -1  # Invalid value
+
+    fn display(mut self):
+        for _row in range(16):
+            for _col in range(16):
+                print(self.grid[_row][_col], end=" ")
+            print()
+
+
+struct Sudoku:
+    var storage: _SudokuStorage
+    var Debug: Bool
+    var percent: Int
+
+    fn __init__(mut self, Debug: Bool = False, percent: Int = 50):
+        self.storage = _SudokuStorage()
+        self.Debug = Debug
+        self.percent = percent
+        self.sudokuGenerator(percent)
+
+    fn fillBox(mut self, row: Int, col: Int):
+        nums = List(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)
+        shuffle(nums)  # Shuffle numbers for randomness
+        index = 0
+        for i in range(4):
+            for j in range(4):
+                self.storage.set_value(row + i, col + j, nums[index])
+                index += 1
+
+    fn unUsedInBox(mut self, x: Int, y: Int, val: Int) -> Bool:
+        for i in range(4):
+            for j in range(4):
+                if self.storage.get_value(x + i, y + j) == val:
+                    return False
+        return True
+
+    fn unUsedInCol(mut self, col: Int, val: Int) -> Bool:
+        for i in range(16):
+            if self.storage.get_value(i, col) == val:
+                return False
+        return True
+
+    fn unUsedInRow(mut self, row: Int, val: Int) -> Bool:
+        for i in range(16):
+            if self.storage.get_value(row, i) == val:
+                return False
+        return True
+
+    fn checkIfSafe(mut self, x: Int, y: Int, val: Int) -> Bool:
+        if (
+            self.unUsedInCol(x, val)
+            and self.unUsedInRow(y, val)
+            and self.unUsedInBox(x - x % 4, y - y % 4, val)
+        ):
+            return True
+        return False
+
+    fn fillDiagonal(mut self):
+        for i in range(4):
+            # Fill each 4x4 subgrid diagonally
+            self.fillBox(i * 4, i * 4)
+
+    fn fillRemaining(mut self, i: Int, j: Int) -> Bool:
+        # If we've reached the end of the grid
+        if i == 16:
+            return True
+
+        # Move to next row when current row is finished
+        if j == 16:
+            return self.fillRemaining(i + 1, 0)
+
+        # Skip if cell is already filled
+        if self.storage.get_value(i, j) != 0:
+            _ = self.fillRemaining(i, j + 1)
+            return True
+
+        # Try numbers 1-9 in current cell
+        for num in range(16):
+            if self.checkIfSafe(i, j, num + 1):
+                self.storage.set_value(i, j, num + 1)
+                if self.fillRemaining(i, j + 1):
+                    return True
+                self.storage.set_value(i, j, 0)
+
+        return False
+
+    fn removeKDigits(mut self, k: Int):
+        _k = k
+        while _k > 0:
+            # Pick a random cell
+            cellId = Int(random_ui64(UInt64(0), UInt64(16 * 16 - 1)))
+            # Get the row index
+            i = cellId // 16
+
+            # Get the column index
+            j = cellId % 16
+
+            # Remove the digit if the cell is not already empty
+            if self.storage.get_value(i, j) != 0:
+                # Empty the cell
+                self.storage.set_value(i, j, 0)
+                # Decrease the count of digits to remove
+                _k -= 1
+
+    fn sudokuGenerator(mut self, percent: Int):
+        # Calculate the number of cells to remove
+        k = Int((percent / 100) * 16 * 16)
+        # grid = [[0] * 9 for _ in range(16)]
+        print("k: ", k)
+        # Fill the diagonal 3x3 matrices
+        # self.fillDiagonal()
+        # Fill the remaining blocks in the grid
+        # _ = self.fillRemaining(0, 0)
+        _ = self.fill_grid()
+        # Print the grid
+
+        # Remove K digits randomly to create the puzzle
+        self.removeKDigits(k)
+
+    fn is_valid(self, row: Int, col: Int, num: Int) -> Bool:
+        # Check row, column, and subgrid
+        for i in range(16):
+            if (
+                self.storage.get_value(row, i) == num
+                or self.storage.get_value(i, col) == num
+            ):
+                return False
+
+        start_row = row - row % 4
+        start_col = col - col % 4
+        for i in range(4):
+            for j in range(4):
+                if self.storage.get_value(start_row + i, start_col + j) == num:
+                    return False
+
+        return True
+
+    fn shuffle_within_subgrid(mut self):
+        # Shuffle rows and columns within each 4x4 subgrid
+        for subgrid_row in range(0, 16, 4):
+            for subgrid_col in range(0, 16, 4):
+                # Shuffle rows within the subgrid
+                self.shuffle_rows(subgrid_row, subgrid_col)
+                # Shuffle columns within the subgrid
+                self.shuffle_columns(subgrid_row, subgrid_col)
+
+    fn shuffle_rows(mut self, start_row: Int, start_col: Int):
+        # Shuffle the rows in the 4x4 subgrid
+        rows = [start_row, start_row + 1, start_row + 2, start_row + 3]
+        shuffle(rows)
+        # Reassign shuffled rows in the subgrid
+        for i in range(4):
+            self.copy_row(rows[i], start_row + i)
+
+    fn shuffle_columns(mut self, start_row: Int, start_col: Int):
+        # Shuffle the columns in the 4x4 subgrid
+        cols = [start_col, start_col + 1, start_col + 2, start_col + 3]
+        shuffle(cols)
+        # Reassign shuffled columns in the subgrid
+        for i in range(4):
+            self.copy_column(cols[i], start_col + i)
+
+    fn shuffle_numbers(mut self):
+        # Shuffle numbers across the grid
+        numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shuffle(numbers)
+
+        # Create a map of number swaps and apply
+        for i in range(16):
+            for j in range(16):
+                current_value = self.storage.get_value(i, j)
+                new_value = numbers[
+                    current_value - 1
+                ]  # Assuming values are 1-16
+                self.storage.set_value(i, j, new_value)
+
+    fn fill_grid(mut self) -> Bool:
+        # Find next empty cell
+        for row in range(16):
+            for col in range(16):
+                if self.storage.get_value(row, col) == 0:
+                    for num in range(1, 17):  # Try numbers 1 to 16
+                        if self.is_valid(row, col, num):
+                            self.storage.set_value(row, col, num)
+                            if self.fill_grid():
+                                return True  # Recur to fill next cell
+                            self.storage.set_value(row, col, 0)  # Backtrack
+                    return False  # No valid number, backtrack
+
+        return True  # Grid filled successfully
+
+
+fn main():
+    sudoku = Sudoku(Debug=False, percent=0)
+    sudoku.storage.display()

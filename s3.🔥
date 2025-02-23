@@ -1,0 +1,444 @@
+"""
+Daily state: Works sometimes :)
+"""
+
+from random import random_ui64, seed
+import math
+
+
+alias base = 7
+
+
+struct _SudokuStorage:
+    var grid: List[List[Int]]
+    var size: Int
+
+    fn __init__(mut self):
+        self.size = base * base
+        self.grid = List[List[Int]]()
+        # Set to 0
+        for _i in range(self.size):
+            row = List[Int]()
+            row.reserve(self.size)  # Prealloc
+            for _j in range(self.size):
+                row.append(0)
+            self.grid.append(row)
+
+    fn __copyinit__(mut self, existing: Self):
+        self.size = existing.size
+        self.grid = List[List[Int]]()
+        for _row in range(len(existing.grid)):
+            row = existing.grid[_row]
+            new_row = List[Int]()
+            for value in range(len(row)):
+                new_row.append(row[value])
+            self.grid.append(new_row)
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.grid = existing.grid^
+        self.size = existing.size
+        # existing.grid = List[List[Int]]()
+
+    @always_inline
+    fn set_value(mut self, row: Int, col: Int, value: Int):
+        self.grid[row][col] = value
+
+    @always_inline
+    fn get_value(self, row: Int, col: Int) -> Int:
+        # if 0 <= row < self.size and 0 <= col < self.size:
+        return self.grid[row][col]
+        # return -1  # Invalid value
+
+    fn display_chars(mut self):
+        for r in range(self.size):
+            if r % base == 0 and r != 0:
+                print("-" * (self.size * 2 + base - 1))
+            for c in range(self.size):
+                if c % base == 0 and c != 0:
+                    print("|", end=" ")
+                value = self.grid[r][c]
+                if value == 0:
+                    print(" ", end=" ")
+                elif value > 9:
+                    print(chr(ord("A") + value - 10), end=" ")
+                else:
+                    print(value, end=" ")
+            print()
+
+
+struct Sudoku:
+    var storage: _SudokuStorage
+    var percent: Int
+    var size: Int
+
+    fn __init__(mut self, percent: Int = 50):
+        self.storage = _SudokuStorage()
+        self.percent = percent
+        self.size = base * base
+
+    fn Solve(self) -> SudokuSolver:
+        """Pass a reference to a new SudokuSolver."""
+        return SudokuSolver(self.storage)
+
+    fn fill_grid(mut self) -> NoneType:
+        side = self.size
+
+        @always_inline
+        def pattern(r: Int, c: Int) -> Int:
+            return (base * (r % base) + r // base + c) % side
+
+        nums = range(1, side + 1)
+
+        for r in range(side):
+            for c in range(side):
+                try:
+                    self.storage.set_value(r, c, nums[pattern(r, c)])
+                except:
+                    return
+        return
+
+    fn getRandomSwaps(
+        mut self, size: Int, iterations: Int
+    ) -> List[Tuple[Int, Int]]:
+        swaps = List[Tuple[Int, Int]]()
+        for _ in range(iterations):
+            i = Int(random_ui64(UInt64(0), UInt64(size - 1)))
+            j = Int(random_ui64(UInt64(0), UInt64(size - 1)))
+            if i != j:
+                swaps.append((i, j))
+        return swaps
+
+    @export
+    fn shuffle(mut self, iterations: Int = 20) -> NoneType:
+        base = Int(math.sqrt(self.size))
+        # print("Starting shuffle with base:", base)
+
+        # Shuffle rows within each block
+        for block in range(base):
+            swaps = self.getRandomSwaps(base, iterations)
+            for swap in range(len(swaps)):
+                i = swaps[swap][0]
+                j = swaps[swap][1]
+                for k in range(self.size):
+                    self.storage.grid[block * base + i][k], self.storage.grid[
+                        block * base + j
+                    ][k] = (
+                        self.storage.grid[block * base + j][k],
+                        self.storage.grid[block * base + i][k],
+                    )
+
+        # Shuffle columns within each block
+        for block in range(base):
+            swaps = self.getRandomSwaps(base, iterations)
+            for swap in range(len(swaps)):
+                i = swaps[swap][0]
+                j = swaps[swap][1]
+                for k in range(self.size):
+                    self.storage.grid[k][block * base + i], self.storage.grid[
+                        k
+                    ][block * base + j] = (
+                        self.storage.grid[k][block * base + j],
+                        self.storage.grid[k][block * base + i],
+                    )
+        return
+
+    fn checkValidity[Debug: Bool = False](mut self) -> Bool:
+        # Check rows
+        @parameter
+        if Debug:
+            print("Checking rows...")
+        for row in range(self.size):
+            seen = List[Int]()
+            for col in range(self.size):
+                value = self.storage.get_value(row, col)
+                if value in seen:
+                    return False
+                seen.append(value)
+
+        @parameter
+        if Debug:
+            print("Checking columns...")
+        # Check columns
+        for col in range(self.size):
+            seen = List[Int]()
+            for row in range(self.size):
+                value = self.storage.get_value(row, col)
+                if value in seen:
+                    return False
+                seen.append(value)
+
+        @parameter
+        if Debug:
+            print("Checking subgrids...")
+        # Check subgrids
+        for boxRow in range(base):
+            for boxCol in range(base):
+                seen = seen = List[Int]()
+                for row in range(boxRow * base, boxRow * base + base):
+                    for col in range(boxCol * base, boxCol * base + base):
+                        value = self.storage.get_value(row, col)
+                        if value in seen:
+                            return False
+                        seen.append(value)
+
+        return True
+
+    fn remove_digits[
+        Debug: Bool = False
+    ](mut self):  # Calculate number of cells to remove
+        total_cells = self.size * self.size
+        cells_to_remove = (total_cells * self.percent) // 100
+
+        @parameter
+        if Debug:
+            print("Total cells:", total_cells)
+            print("Cells to remove:", cells_to_remove)
+
+        if cells_to_remove == 0:
+            return
+
+        var removed_count: Int = 0
+        positions_per_chunk = 2
+        _it = 0
+        while removed_count < cells_to_remove:
+            # Get one random 64-bit number
+            rand_num = random_ui64(UInt64(0), UInt64(1 << 64 - 1))
+
+            @parameter
+            if Debug:
+                _it += 1
+
+            # Try up to 8 positions from this random number
+            for i in range(positions_per_chunk):
+                if removed_count >= cells_to_remove:
+                    break
+                # Extract bits and map to grid position
+                pos = Int((rand_num >> (i * 8)) & 0xFFFFFFFF) % total_cells
+                row = pos // self.size
+                col = pos % self.size
+
+                # Only clear if the cell isn't already empty
+                if self.storage.grid[row][col] != 0:
+                    self.storage.grid[row][col] = 0
+                    removed_count += 1
+
+        @parameter
+        if Debug:
+            print("Iterations:", _it)
+            print("Removed count:", removed_count)
+        return
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.storage = existing.storage^
+        self.percent = existing.percent
+        self.size = existing.size
+
+
+struct Position:
+    var row: Int
+    var col: Int
+    var num: Int
+    var tried: List[Int]  # Numbers we've already tried at this position
+
+    @always_inline
+    fn __init__(mut self, row: Int, col: Int):
+        self.row = row
+        self.col = col
+        self.num = 0
+        self.tried = List[Int]()
+
+    # overload
+    fn __init__(mut self):
+        self.row = 0
+        self.col = 0
+        self.num = 0
+        self.tried = List[Int]()
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.row = existing.row
+        self.col = existing.col
+        self.num = existing.num
+        self.tried = existing.tried^
+
+    fn __copyinit__(mut self, read existing: Self):
+        self.row = existing.row
+        self.col = existing.col
+        self.num = existing.num
+        self.tried = existing.tried
+
+
+struct SudokuSolver:
+    var threads: Int  # TODO: Implement multithreading
+    var storage: _SudokuStorage
+    var size: Int
+    var history: List[Position]  # Movement stack
+    var backtracks: Int
+
+    fn __init__(mut self, owned storage: _SudokuStorage):
+        self.storage = storage^
+        self.size = base * base
+        self.threads = 1
+        self.history = List[Position]()
+        self.history.reserve(self.size * self.size)
+        self.backtracks = 0
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.storage = existing.storage^
+        self.size = existing.size
+        self.threads = existing.threads
+        self.history = existing.history^
+        self.backtracks = existing.backtracks
+
+    # TODO: Check speedup with inline in relation to binary size
+    # @always_inline
+    fn _is_valid[Debug: Bool](self, row: Int, col: Int, num: Int) -> Bool:
+        # Check row
+        for x in range(self.size):
+            if x != col and self.storage.get_value(row, x) == num:
+
+                @parameter
+                if Debug:
+                    print("Row conflict at", row, ",", x, "with number", num)
+                return False
+
+        # Check column
+        for x in range(self.size):
+            if x != row and self.storage.get_value(x, col) == num:
+
+                @parameter
+                if Debug:
+                    print("Column conflict at", x, ",", col, "with number", num)
+                return False
+
+        # Check box
+        var box_row = (row // base) * base
+        var box_col = (col // base) * base
+        for r in range(box_row, box_row + base):
+            for c in range(box_col, box_col + base):
+                if (r != row or c != col) and self.storage.get_value(
+                    r, c
+                ) == num:
+
+                    @parameter
+                    if Debug:
+                        print("Box conflict at", r, ",", c, "with number", num)
+                    return False
+
+        return True
+
+    fn _solve_recursive[Debug: Bool](mut self) -> Bool:
+        var best_row = -1
+        var best_col = -1
+        var best_count = self.size + 1
+
+        # Find the empty cell with the fewest valid candidates
+        for r in range(self.size):
+            for c in range(self.size):
+                if self.storage.get_value(r, c) == 0:
+                    var count = 0
+                    for num in range(1, self.size + 1):
+                        if self._is_valid[False](r, c, num):
+                            count += 1
+                    # Short-circuit if no valid candidates
+                    if count == 0:
+                        return False
+                    if count < best_count:
+                        best_count = count
+                        best_row = r
+                        best_col = c
+
+        # If no empty cell found, puzzle is solved
+        if best_row == -1:
+            return True
+
+        var pos = Position(best_row, best_col)
+        self.history.append(pos)
+
+        # Try valid candidates
+        for num in range(1, self.size + 1):
+            if num in pos.tried:
+                continue
+            if self._is_valid[False](best_row, best_col, num):
+                self.storage.set_value(best_row, best_col, num)
+                pos.num = num
+                pos.tried.append(num)
+                if self._solve_recursive[Debug]():
+                    return True
+                self.storage.set_value(best_row, best_col, 0)
+
+                @parameter
+                if Debug:
+                    self.backtracks+=1
+                    if self.backtracks % 1000 == 0:
+                        print("\r                                                                  ",end="")
+                        print("\rBacktracking at (" + str(best_row) + "," + str(best_col) + ") from " + str(num),end="")
+                        print(" iteration number: ",self.backtracks, end="")
+
+        self.history.pop()
+        return False
+
+    fn solve[Debug: Bool](mut self) -> Bool:
+        @parameter
+        if Debug:
+            print("\nInitial state:")
+            self.storage.display_chars()
+
+        var result = self._solve_recursive[Debug]()
+
+        @parameter
+        if Debug:
+            if result:
+                print("\nSolved successfully!")
+            else:
+                print("\nNo solution exists.")
+                self.storage.display_chars()
+
+        return result
+
+    fn debug_stdin(mut self) -> Bool:
+        try:
+            key = input("Enter to continue...")
+            for _pos in range(len(self.history)):
+                pos = self.history[_pos]
+                print("Stack:")
+                print(" Position:", pos.row, ",", pos.col)
+                print(" Number:", pos.num)
+                print("------")
+            if len(self.history) == 0:
+                print("Stack is empty.")
+            if not key:
+                print("Stepping...")
+            else:
+                print("Dumping...")
+                self.storage.display_chars()
+                return self.debug_stdin()
+        except:
+            pass
+        return False
+
+
+fn main():
+    alias debug = True
+    seed()
+
+    @parameter
+    if debug:
+        seed(2)
+
+    sudoku = Sudoku(percent=38)
+
+    sudoku.fill_grid()
+    sudoku.shuffle()
+    if not sudoku.checkValidity[debug]():
+        print("Invalid Sudoku!")
+    sudoku.remove_digits[debug]()
+    sudoku.storage.display_chars()
+
+    var solver = sudoku^.Solve()
+    var solved = solver.solve[debug]()
+
+    if solved:
+        print("Solved Sudoku:")
+        solver.storage.display_chars()
+    else:
+        print("No solution exists.")

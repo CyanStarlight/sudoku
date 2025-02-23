@@ -1,0 +1,116 @@
+from random import random_ui64, shuffle, seed
+from collections import InlineArray, List, Optional
+
+
+struct Convert:
+    fn __init__(mut self: Self):
+        pass
+
+    fn to_inline_array_p3(
+        mut self, lst: List[Optional[Int]]
+    ) -> InlineArray[Optional[Int], 3]:
+        var result = InlineArray[Optional[Int], 3](unsafe_uninitialized=True)
+        for i in range(min(3, len(lst))):
+            result[i] = lst[i]
+        return result
+
+
+struct Sudoku:
+    var dimensions: InlineArray[Optional[Int], 3]
+    var matrix: List[List[UInt8]]
+
+    def __initMatrix(self) -> List[List[UInt8]]:
+        var x = self.dimensions[0].value()
+        var y = self.dimensions[1].value()
+        var _Matrix = List[List[UInt8]]()  # This creates a 2D List of UInt8
+        for i in range(x):  # Bottleneck
+            _Matrix.append(List[UInt8]())
+            for _ in range(y):
+                _Matrix[i].append(0)
+        return _Matrix
+
+    # Overload for the dimensions parameter
+    fn __init__(
+        mut self: Self,
+        dimensions: List[Optional[Int]],
+    ):
+        var converter = Convert()  # Create an instance of Convert
+        self.dimensions = converter.to_inline_array_p3(dimensions)
+        self.matrix = List[List[UInt8]]()
+        self.matrix.__init__()
+        try:
+            self.matrix = self.__initMatrix()
+        except:
+            pass
+
+    fn __init__(
+        mut self: Self,
+        port: StringLiteral,
+        dimensions: InlineArray[Optional[Int], 3],
+        protocol: Optional[StringLiteral] = "NORMAL",
+    ):
+        self.dimensions = dimensions
+        self.matrix = List[List[UInt8]]()
+        self.matrix.__init__()
+        try:
+            self.matrix = self.__initMatrix()
+        except:
+            pass
+
+    fn __copyinit__(mut self: Self, other: Self):
+        self.dimensions = other.dimensions
+        self.matrix = other.matrix
+
+    fn setMatrix(
+        mut self, matrix: List[List[UInt8]]
+    ):  # Would be nice to also accept a pointer to a matrix instead of a copy
+        self.matrix = matrix
+
+    """
+    Since Mojo doesn't support dynamic types, its rather difficult to implement a function that accepts a pointer to a matrix.
+    """
+
+    fn setMatrixElement(mut self, x: Int, y: Int, value: UInt8):
+        self.matrix[x][y] = value
+
+    fn getMatrix(self) -> List[List[UInt8]]:
+        return self.matrix
+
+    fn getMatrixElement(self, x: Int, y: Int) -> UInt8:
+        return self.matrix[x][y]
+
+
+fn main():
+    var dims: List[Optional[Int]]
+    dims.__init__()
+    x = 16
+    y = 16
+    dims.append(x)
+    dims.append(y)
+    dims.append(None)  # Placeholder for the third dimension
+    var testmatrix = Sudoku(dims)
+    """
+    var ll: Tuple[InlineArray[Optional[Int], 3]]
+    print(ll[0])
+    for i in range(3):
+        d = ll[1][i]
+        if d == None:
+            print("None", end=" ")
+        else:
+            print(d.value(), end=" ")
+    print()
+    print(ll[2].value())
+
+    for i in range(x):
+        for j in range(y):
+            testmatrix.setMatrixElement(i, j, (i + j) % 16)
+
+    var matrix = testmatrix.getMatrix()
+    if len(matrix) > 0:
+        for i in range(len(matrix)):
+            for j in range(len(matrix[i])):
+                print(matrix[i][j], end=" ")
+            print()
+    else:
+        print("Matrix is empty")
+    """
