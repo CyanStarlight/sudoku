@@ -4,7 +4,7 @@ from src.solver import SudokuSolver
 from random import random_ui64
 import math
 
-alias base = 7
+alias base = 5
 
 
 struct Sudoku:

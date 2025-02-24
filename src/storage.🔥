@@ -1,4 +1,4 @@
-alias base = 7
+alias base = 5
 
 
 struct _SudokuStorage:

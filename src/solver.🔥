@@ -6,7 +6,7 @@ from random import seed
 from src.grid import _SudokuStorage, Sudoku
 from src.Position import *
 
-alias base = 7
+alias base = 5
 
 
 struct SudokuSolver:
@@ -93,8 +93,8 @@ struct SudokuSolver:
         if best_row == -1:
             return True
 
-        var pos = Position(best_row, best_col)
-        self.history.append(pos)
+        var pos = Position(best_row, best_col, 0)
+        # self.history.append(pos)
 
         # Try valid candidates
         for num in range(1, self.size + 1):
@@ -104,8 +104,11 @@ struct SudokuSolver:
                 self.storage.set_value(best_row, best_col, num)
                 pos.num = num
                 pos.tried.append(num)
+                self.history.append(pos)
+                # self.debug_stdin()
                 if self._solve_recursive[Debug]():
                     return True
+                _ = self.history.pop()
                 self.storage.set_value(best_row, best_col, 0)
 
                 @parameter
@@ -121,7 +124,7 @@ struct SudokuSolver:
                         )  # Such long string to clear line, essentailly
                         print(
                             String(
-                                "\rBacktracking at (",
+                                "Backtracking at (",
                                 best_row,
                                 ",",
                                 best_col,
@@ -130,9 +133,9 @@ struct SudokuSolver:
                             ),
                             end="",
                         )
-                        print(" iteration number: ", self.backtracks, end="")
-
-        _ = self.history.pop()
+                        print(" iteration number: ", self.backtracks)
+                        self.storage.display_chars()
+                        # self.debug_stdin()
         return False
 
     fn solve[Debug: Bool](mut self) -> Bool:
@@ -169,7 +172,7 @@ struct SudokuSolver:
             else:
                 print("Dumping...")
                 self.storage.display_chars()
-                return self.debug_stdin()
+                return False  # self.debug_stdin()
         except:
             pass
         return False
@@ -183,7 +186,7 @@ fn main():
     if debug:
         seed(2)
 
-    sudoku = Sudoku(percent=38)
+    sudoku = Sudoku(percent=90)
 
     sudoku.fill_grid()
     sudoku.shuffle()
