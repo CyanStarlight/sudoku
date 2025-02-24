@@ -1,0 +1,28 @@
+from src import *
+
+
+fn main():
+    alias debug = True
+    seed()
+
+    @parameter
+    if debug:
+        seed(2)
+
+    sudoku = Sudoku(percent=38)
+
+    sudoku.fill_grid()
+    sudoku.shuffle()
+    if not sudoku.checkValidity[debug]():
+        print("Invalid Sudoku!")
+    sudoku.remove_digits[debug]()
+    sudoku.storage.display_chars()
+
+    var solver = sudoku^.Solve()
+    var solved = solver.solve[debug]()
+
+    if solved:
+        print("Solved Sudoku:")
+        solver.storage.display_chars()
+    else:
+        print("No solution exists.")

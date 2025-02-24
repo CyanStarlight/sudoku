@@ -1,0 +1,31 @@
+struct Position:
+    var row: Int
+    var col: Int
+    var num: Int
+    var tried: List[Int]  # Numbers we've already tried at this position
+
+    @always_inline
+    fn __init__(mut self, row: Int, col: Int):
+        self.row = row
+        self.col = col
+        self.num = 0
+        self.tried = List[Int]()
+
+    # overload
+    fn __init__(mut self):
+        self.row = 0
+        self.col = 0
+        self.num = 0
+        self.tried = List[Int]()
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.row = existing.row
+        self.col = existing.col
+        self.num = existing.num
+        self.tried = existing.tried^
+
+    fn __copyinit__(mut self, read existing: Self):
+        self.row = existing.row
+        self.col = existing.col
+        self.num = existing.num
+        self.tried = existing.tried

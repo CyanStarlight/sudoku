@@ -1,0 +1,202 @@
+"""
+Daily state: Works sometimes :)
+"""
+from random import seed
+
+from src.grid import _SudokuStorage, Sudoku
+from src.Position import *
+
+alias base = 7
+
+
+struct SudokuSolver:
+    var threads: Int  # TODO: Implement multithreading
+    var storage: _SudokuStorage
+    var size: Int
+    var history: List[Position]  # Movement stack
+    var backtracks: Int
+
+    fn __init__(mut self, owned storage: _SudokuStorage):
+        self.storage = storage^
+        self.size = base * base
+        self.threads = 1
+        self.history = List[Position]()
+        self.history.reserve(self.size * self.size)
+        self.backtracks = 0
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.storage = existing.storage^
+        self.size = existing.size
+        self.threads = existing.threads
+        self.history = existing.history^
+        self.backtracks = existing.backtracks
+
+    # TODO: Check speedup with inline in relation to binary size
+    # @always_inline
+    fn _is_valid[Debug: Bool](self, row: Int, col: Int, num: Int) -> Bool:
+        # Check row
+        for x in range(self.size):
+            if x != col and self.storage.get_value(row, x) == num:
+
+                @parameter
+                if Debug:
+                    print("Row conflict at", row, ",", x, "with number", num)
+                return False
+
+        # Check column
+        for x in range(self.size):
+            if x != row and self.storage.get_value(x, col) == num:
+
+                @parameter
+                if Debug:
+                    print("Column conflict at", x, ",", col, "with number", num)
+                return False
+
+        # Check box
+        var box_row = (row // base) * base
+        var box_col = (col // base) * base
+        for r in range(box_row, box_row + base):
+            for c in range(box_col, box_col + base):
+                if (r != row or c != col) and self.storage.get_value(
+                    r, c
+                ) == num:
+
+                    @parameter
+                    if Debug:
+                        print("Box conflict at", r, ",", c, "with number", num)
+                    return False
+
+        return True
+
+    fn _solve_recursive[Debug: Bool](mut self) -> Bool:
+        var best_row = -1
+        var best_col = -1
+        var best_count = self.size + 1
+
+        # Find the empty cell with the fewest valid candidates
+        for r in range(self.size):
+            for c in range(self.size):
+                if self.storage.get_value(r, c) == 0:
+                    var count = 0
+                    for num in range(1, self.size + 1):
+                        if self._is_valid[False](r, c, num):
+                            count += 1
+                    # Short-circuit if no valid candidates
+                    if count == 0:
+                        return False
+                    if count < best_count:
+                        best_count = count
+                        best_row = r
+                        best_col = c
+
+        # If no empty cell found, puzzle is solved
+        if best_row == -1:
+            return True
+
+        var pos = Position(best_row, best_col)
+        self.history.append(pos)
+
+        # Try valid candidates
+        for num in range(1, self.size + 1):
+            if num in pos.tried:
+                continue
+            if self._is_valid[False](best_row, best_col, num):
+                self.storage.set_value(best_row, best_col, num)
+                pos.num = num
+                pos.tried.append(num)
+                if self._solve_recursive[Debug]():
+                    return True
+                self.storage.set_value(best_row, best_col, 0)
+
+                @parameter
+                if Debug:
+                    self.backtracks += 1
+                    if self.backtracks % 1000 == 0:
+                        print(
+                            (
+                                "\r                                            "
+                                "                      "
+                            ),
+                            end="",
+                        )  # Such long string to clear line, essentailly
+                        print(
+                            String(
+                                "\rBacktracking at (",
+                                best_row,
+                                ",",
+                                best_col,
+                                ") from ",
+                                num,
+                            ),
+                            end="",
+                        )
+                        print(" iteration number: ", self.backtracks, end="")
+
+        _ = self.history.pop()
+        return False
+
+    fn solve[Debug: Bool](mut self) -> Bool:
+        @parameter
+        if Debug:
+            print("\nInitial state:")
+            self.storage.display_chars()
+
+        var result = self._solve_recursive[Debug]()
+
+        @parameter
+        if Debug:
+            if result:
+                print("\nSolved successfully!")
+            else:
+                print("\nNo solution exists.")
+                self.storage.display_chars()
+
+        return result
+
+    fn debug_stdin(mut self) -> Bool:
+        try:
+            key = input("Enter to continue...")
+            for _pos in range(len(self.history)):
+                pos = self.history[_pos]
+                print("Stack:")
+                print(" Position:", pos.row, ",", pos.col)
+                print(" Number:", pos.num)
+                print("------")
+            if len(self.history) == 0:
+                print("Stack is empty.")
+            if not key:
+                print("Stepping...")
+            else:
+                print("Dumping...")
+                self.storage.display_chars()
+                return self.debug_stdin()
+        except:
+            pass
+        return False
+
+
+fn main():
+    alias debug = True
+    seed()
+
+    @parameter
+    if debug:
+        seed(2)
+
+    sudoku = Sudoku(percent=38)
+
+    sudoku.fill_grid()
+    sudoku.shuffle()
+    if not sudoku.checkValidity[debug]():
+        print("Invalid Sudoku!")
+    sudoku.remove_digits[debug]()
+    sudoku.storage.display_chars()
+
+    var solver = sudoku^.Solve()
+    var solved = solver.solve[debug]()
+
+    if solved:
+        print("Solved Sudoku:")
+        solver.storage.display_chars()
+    else:
+        print("No solution exists.")

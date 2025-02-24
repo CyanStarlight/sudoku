@@ -1,0 +1,58 @@
+alias base = 7
+
+
+struct _SudokuStorage:
+    var grid: List[List[Int]]
+    var size: Int
+
+    fn __init__(mut self):
+        self.size = base * base
+        self.grid = List[List[Int]]()
+        # Set to 0
+        for _i in range(self.size):
+            row = List[Int]()
+            row.reserve(self.size)  # Prealloc
+            for _j in range(self.size):
+                row.append(0)
+            self.grid.append(row)
+
+    fn __copyinit__(mut self, existing: Self):
+        self.size = existing.size
+        self.grid = List[List[Int]]()
+        for _row in range(len(existing.grid)):
+            row = existing.grid[_row]
+            new_row = List[Int]()
+            for value in range(len(row)):
+                new_row.append(row[value])
+            self.grid.append(new_row)
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.grid = existing.grid^
+        self.size = existing.size
+        # existing.grid = List[List[Int]]()
+
+    @always_inline
+    fn set_value(mut self, row: Int, col: Int, value: Int):
+        self.grid[row][col] = value
+
+    @always_inline
+    fn get_value(self, row: Int, col: Int) -> Int:
+        # if 0 <= row < self.size and 0 <= col < self.size:
+        return self.grid[row][col]
+        # return -1  # Invalid value
+
+    fn display_chars(mut self):
+        for r in range(self.size):
+            if r % base == 0 and r != 0:
+                print("-" * (self.size * 2 + base - 1))
+            for c in range(self.size):
+                if c % base == 0 and c != 0:
+                    print("|", end=" ")
+                value = self.grid[r][c]
+                if value == 0:
+                    print(" ", end=" ")
+                elif value > 9:
+                    print(chr(ord("A") + value - 10), end=" ")
+                else:
+                    print(value, end=" ")
+            print()

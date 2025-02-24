@@ -1,0 +1,175 @@
+from src.storage import _SudokuStorage
+from src.solver import SudokuSolver
+
+from random import random_ui64
+import math
+
+alias base = 7
+
+
+struct Sudoku:
+    var storage: _SudokuStorage
+    var percent: Int
+    var size: Int
+
+    fn __init__(mut self, percent: Int = 50):
+        self.storage = _SudokuStorage()
+        self.percent = percent
+        self.size = base * base
+
+    fn Solve(self) -> SudokuSolver:
+        """Pass a reference to a new SudokuSolver."""
+        return SudokuSolver(self.storage)
+
+    fn fill_grid(mut self) -> NoneType:
+        side = self.size
+
+        @always_inline
+        def pattern(r: Int, c: Int) -> Int:
+            return (base * (r % base) + r // base + c) % side
+
+        nums = range(1, side + 1)
+
+        for r in range(side):
+            for c in range(side):
+                try:
+                    self.storage.set_value(r, c, nums[pattern(r, c)])
+                except:
+                    return
+        return
+
+    fn getRandomSwaps(
+        mut self, size: Int, iterations: Int
+    ) -> List[Tuple[Int, Int]]:
+        swaps = List[Tuple[Int, Int]]()
+        for _ in range(iterations):
+            i = Int(random_ui64(UInt64(0), UInt64(size - 1)))
+            j = Int(random_ui64(UInt64(0), UInt64(size - 1)))
+            if i != j:
+                swaps.append((i, j))
+        return swaps
+
+    @export
+    fn shuffle(mut self, iterations: Int = 20) -> NoneType:
+        base = Int(math.sqrt(self.size))
+        # print("Starting shuffle with base:", base)
+
+        # Shuffle rows within each block
+        for block in range(base):
+            swaps = self.getRandomSwaps(base, iterations)
+            for swap in range(len(swaps)):
+                i = swaps[swap][0]
+                j = swaps[swap][1]
+                for k in range(self.size):
+                    self.storage.grid[block * base + i][k], self.storage.grid[
+                        block * base + j
+                    ][k] = (
+                        self.storage.grid[block * base + j][k],
+                        self.storage.grid[block * base + i][k],
+                    )
+
+        # Shuffle columns within each block
+        for block in range(base):
+            swaps = self.getRandomSwaps(base, iterations)
+            for swap in range(len(swaps)):
+                i = swaps[swap][0]
+                j = swaps[swap][1]
+                for k in range(self.size):
+                    self.storage.grid[k][block * base + i], self.storage.grid[
+                        k
+                    ][block * base + j] = (
+                        self.storage.grid[k][block * base + j],
+                        self.storage.grid[k][block * base + i],
+                    )
+        return
+
+    fn checkValidity[Debug: Bool = False](mut self) -> Bool:
+        # Check rows
+        @parameter
+        if Debug:
+            print("Checking rows...")
+        for row in range(self.size):
+            seen = List[Int]()
+            for col in range(self.size):
+                value = self.storage.get_value(row, col)
+                if value in seen:
+                    return False
+                seen.append(value)
+
+        @parameter
+        if Debug:
+            print("Checking columns...")
+        # Check columns
+        for col in range(self.size):
+            seen = List[Int]()
+            for row in range(self.size):
+                value = self.storage.get_value(row, col)
+                if value in seen:
+                    return False
+                seen.append(value)
+
+        @parameter
+        if Debug:
+            print("Checking subgrids...")
+        # Check subgrids
+        for boxRow in range(base):
+            for boxCol in range(base):
+                seen = seen = List[Int]()
+                for row in range(boxRow * base, boxRow * base + base):
+                    for col in range(boxCol * base, boxCol * base + base):
+                        value = self.storage.get_value(row, col)
+                        if value in seen:
+                            return False
+                        seen.append(value)
+
+        return True
+
+    fn remove_digits[
+        Debug: Bool = False
+    ](mut self):  # Calculate number of cells to remove
+        total_cells = self.size * self.size
+        cells_to_remove = (total_cells * self.percent) // 100
+
+        @parameter
+        if Debug:
+            print("Total cells:", total_cells)
+            print("Cells to remove:", cells_to_remove)
+
+        if cells_to_remove == 0:
+            return
+
+        var removed_count: Int = 0
+        positions_per_chunk = 2
+        _it = 0
+        while removed_count < cells_to_remove:
+            # Get one random 64-bit number
+            rand_num = random_ui64(UInt64(0), UInt64(1 << 64 - 1))
+
+            @parameter
+            if Debug:
+                _it += 1
+
+            # Try up to 8 positions from this random number
+            for i in range(positions_per_chunk):
+                if removed_count >= cells_to_remove:
+                    break
+                # Extract bits and map to grid position
+                pos = Int((rand_num >> (i * 8)) & 0xFFFFFFFF) % total_cells
+                row = pos // self.size
+                col = pos % self.size
+
+                # Only clear if the cell isn't already empty
+                if self.storage.grid[row][col] != 0:
+                    self.storage.grid[row][col] = 0
+                    removed_count += 1
+
+        @parameter
+        if Debug:
+            print("Iterations:", _it)
+            print("Removed count:", removed_count)
+        return
+
+    fn __moveinit__(mut self, owned existing: Self):
+        self.storage = existing.storage^
+        self.percent = existing.percent
+        self.size = existing.size
