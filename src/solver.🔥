@@ -3,10 +3,14 @@ Daily state: Works sometimes :)
 """
 from random import seed
 
+
+from sys.ffi import *
+
+
 from src.grid import _SudokuStorage, Sudoku
 from src.Position import *
 
-alias base = 5
+alias base = 3
 
 
 struct SudokuSolver:
@@ -74,27 +78,59 @@ struct SudokuSolver:
         var best_count = self.size + 1
 
         # Find the empty cell with the fewest valid candidates
-        for r in range(self.size):
-            for c in range(self.size):
-                if self.storage.get_value(r, c) == 0:
-                    var count = 0
-                    for num in range(1, self.size + 1):
-                        if self._is_valid[False](r, c, num):
-                            count += 1
-                    # Short-circuit if no valid candidates
-                    if count == 0:
-                        return False
-                    if count < best_count:
-                        best_count = count
-                        best_row = r
-                        best_col = c
+        var top = 0
+        var bottom = self.size - 1
+        var left = 0
+        var right = self.size - 1
+
+        while top <= bottom and left <= right:
+            # Move right along top row
+            for i in range(left, right + 1):
+                if self.storage.get_value(top, i) == 0:
+                    best_row = top
+                    best_col = i
+                    break
+            top += 1
+            if best_row != -1:
+                break
+
+            # Move down along right column
+            for i in range(top, bottom + 1):
+                if self.storage.get_value(i, right) == 0:
+                    best_row = i
+                    best_col = right
+                    break
+            right -= 1
+            if best_row != -1:
+                break
+
+            # Move left along bottom row
+            if top <= bottom:
+                for i in range(right, left - 1, -1):
+                    if self.storage.get_value(bottom, i) == 0:
+                        best_row = bottom
+                        best_col = i
+                        break
+                bottom -= 1
+                if best_row != -1:
+                    break
+
+            # Move up along left column
+            if left <= right:
+                for i in range(bottom, top - 1, -1):
+                    if self.storage.get_value(i, left) == 0:
+                        best_row = i
+                        best_col = left
+                        break
+                left += 1
+                if best_row != -1:
+                    break
 
         # If no empty cell found, puzzle is solved
         if best_row == -1:
             return True
 
         var pos = Position(best_row, best_col, 0)
-        # self.history.append(pos)
 
         # Try valid candidates
         for num in range(1, self.size + 1):
@@ -115,35 +151,24 @@ struct SudokuSolver:
                 if Debug:
                     self.backtracks += 1
                     if self.backtracks % 1000 == 0:
-                        print(
-                            (
-                                "\r                                            "
-                                "                      "
-                            ),
-                            end="",
-                        )  # Such long string to clear line, essentailly
-                        print(
-                            String(
-                                "Backtracking at (",
-                                best_row,
-                                ",",
-                                best_col,
-                                ") from ",
-                                num,
-                            ),
-                            end="",
-                        )
-                        print(" iteration number: ", self.backtracks)
-                        self.storage.display_chars()
+                        pass
+                        # print(
+                        #    String(
+                        #        "Backtracking at (",
+                        #        best_row,
+                        #        ",",
+                        #        best_col,
+                        #        ") from ",
+                        #        num,
+                        #    ),
+                        #    end="",
+                        # )
+                        # print(" iteration number: ", self.backtracks)
+                        # self.storage.display_chars()
                         # self.debug_stdin()
         return False
 
     fn solve[Debug: Bool](mut self) -> Bool:
-        @parameter
-        if Debug:
-            print("\nInitial state:")
-            self.storage.display_chars()
-
         var result = self._solve_recursive[Debug]()
 
         @parameter
@@ -180,11 +205,20 @@ struct SudokuSolver:
 
 fn main():
     alias debug = True
+    alias random = True
     seed()
+
+    alias draw_sudoku_grid = external_call[
+        "draw_sudoku_grid", NoneType, Pointer[Int32], Int32, Float32
+    ]
 
     @parameter
     if debug:
-        seed(2)
+
+        @parameter
+        if not random:
+            seed(2)
+            print("Seed set to a predefined value.")
 
     sudoku = Sudoku(percent=90)
 
